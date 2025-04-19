@@ -51,10 +51,13 @@ export default function CameraCapture({
 		const loadModel = async () => {
 			await tf.setBackend('webgl');
 			await tf.ready();
+			console.log('[Model] TensorFlow.js ready');
 			modelRef.current = await faceDetection.createDetector(
 				faceDetection.SupportedModels.MediaPipeFaceDetector,
 				{ runtime: 'tfjs' }
 			);
+
+			console.log('[Model] Face detection model loaded');
 		};
 
 		if (showFaceFrame) loadModel();
@@ -86,6 +89,7 @@ export default function CameraCapture({
 			const faces = await modelRef.current.estimateFaces(
 				videoRef.current
 			);
+			console.log('[FaceDetection] Faces detected:', faces);
 
 			for (const face of faces) {
 				const { xMin, yMin, width, height } = face.box;
