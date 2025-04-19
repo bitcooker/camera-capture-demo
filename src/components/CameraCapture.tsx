@@ -55,7 +55,9 @@ export default function CameraCapture({
 			modelRef.current = await faceDetection.createDetector(
 				faceDetection.SupportedModels.MediaPipeFaceDetector,
 				{
-					runtime: 'tfjs',
+					runtime: 'mediapipe',
+					solutionPath:
+						'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection',
 					modelType: 'short',
 					maxFaces: 1,
 				}
