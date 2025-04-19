@@ -51,7 +51,6 @@ export default function CameraCapture({
 		const loadModel = async () => {
 			await tf.setBackend('webgl');
 			await tf.ready();
-			console.log('[Model] TensorFlow.js ready');
 			modelRef.current = await faceDetection.createDetector(
 				faceDetection.SupportedModels.MediaPipeFaceDetector,
 				{
@@ -62,8 +61,6 @@ export default function CameraCapture({
 					maxFaces: 1,
 				}
 			);
-
-			console.log('[Model] Face detection model loaded');
 		};
 
 		if (showFaceFrame) loadModel();
@@ -97,7 +94,6 @@ export default function CameraCapture({
 			ctx.clearRect(0, 0, width, height);
 
 			const faces = await modelRef.current.estimateFaces(video);
-			console.log('[FaceDetection] Faces detected:', faces);
 
 			for (const face of faces) {
 				const { xMin, yMin, width, height } = face.box;
@@ -106,8 +102,6 @@ export default function CameraCapture({
 				ctx.lineWidth = 3;
 				ctx.strokeRect(xMin, yMin, width, height);
 			}
-
-			console.log('[Video Size]', video.videoWidth, video.videoHeight);
 		};
 
 		const interval = setInterval(detectFaces, 200);
