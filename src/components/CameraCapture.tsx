@@ -54,7 +54,11 @@ export default function CameraCapture({
 			console.log('[Model] TensorFlow.js ready');
 			modelRef.current = await faceDetection.createDetector(
 				faceDetection.SupportedModels.MediaPipeFaceDetector,
-				{ runtime: 'tfjs', modelType: 'short' }
+				{
+					runtime: 'tfjs',
+					modelType: 'short',
+					maxFaces: 1,
+				}
 			);
 
 			console.log('[Model] Face detection model loaded');
@@ -67,28 +71,30 @@ export default function CameraCapture({
 		if (!showFaceFrame) return;
 
 		const detectFaces = async () => {
+			const video = videoRef.current;
 			if (
-				!videoRef.current ||
 				!overlayRef.current ||
 				!modelRef.current ||
-				videoRef.current.readyState !== 4
-			)
+				!video ||
+				!video.videoWidth ||
+				!video.videoHeight ||
+				video.readyState < 2
+			) {
 				return;
+			}
 
 			const ctx = overlayRef.current.getContext('2d');
 			if (!ctx) return;
 
-			const width = videoRef.current.videoWidth;
-			const height = videoRef.current.videoHeight;
+			const width = video.videoWidth;
+			const height = video.videoHeight;
 
 			overlayRef.current.width = width;
 			overlayRef.current.height = height;
 
 			ctx.clearRect(0, 0, width, height);
 
-			const faces = await modelRef.current.estimateFaces(
-				videoRef.current
-			);
+			const faces = await modelRef.current.estimateFaces(video);
 			console.log('[FaceDetection] Faces detected:', faces);
 
 			for (const face of faces) {
@@ -98,6 +104,8 @@ export default function CameraCapture({
 				ctx.lineWidth = 3;
 				ctx.strokeRect(xMin, yMin, width, height);
 			}
+
+			console.log('[Video Size]', video.videoWidth, video.videoHeight);
 		};
 
 		const interval = setInterval(detectFaces, 200);
