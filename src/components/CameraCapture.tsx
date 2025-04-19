@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
+import * as tf from '@tensorflow/tfjs';
+import * as faceDetection from '@tensorflow-models/face-detection';
+import '@tensorflow/tfjs-backend-webgl';
 
 interface CameraCaptureProps {
 	onCapture: (imageData: string) => void;
 	resolution?: { width: number; height: number };
 	autoPlay?: boolean;
 	showControls?: boolean;
+	showFaceFrame?: boolean;
 }
 
 export default function CameraCapture({
@@ -12,10 +16,13 @@ export default function CameraCapture({
 	resolution = { width: 1920, height: 1080 },
 	autoPlay = true,
 	showControls = true,
+	showFaceFrame = true,
 }: CameraCaptureProps) {
 	const videoRef = useRef<HTMLVideoElement | null>(null);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
+	const overlayRef = useRef<HTMLCanvasElement | null>(null);
 	const [isReady, setIsReady] = useState(false);
+	const modelRef = useRef<faceDetection.FaceDetector | null>(null);
 
 	useEffect(() => {
 		const startCamera = async () => {
@@ -40,6 +47,59 @@ export default function CameraCapture({
 		startCamera();
 	}, [resolution]);
 
+	useEffect(() => {
+		const loadModel = async () => {
+			await tf.setBackend('webgl');
+			await tf.ready();
+			modelRef.current = await faceDetection.createDetector(
+				faceDetection.SupportedModels.MediaPipeFaceDetector,
+				{ runtime: 'tfjs' }
+			);
+		};
+
+		if (showFaceFrame) loadModel();
+	}, [showFaceFrame]);
+
+	useEffect(() => {
+		if (!showFaceFrame) return;
+
+		const detectFaces = async () => {
+			if (
+				!videoRef.current ||
+				!overlayRef.current ||
+				!modelRef.current ||
+				videoRef.current.readyState !== 4
+			)
+				return;
+
+			const ctx = overlayRef.current.getContext('2d');
+			if (!ctx) return;
+
+			const width = videoRef.current.videoWidth;
+			const height = videoRef.current.videoHeight;
+
+			overlayRef.current.width = width;
+			overlayRef.current.height = height;
+
+			ctx.clearRect(0, 0, width, height);
+
+			const faces = await modelRef.current.estimateFaces(
+				videoRef.current
+			);
+
+			for (const face of faces) {
+				const { xMin, yMin, width, height } = face.box;
+
+				ctx.strokeStyle = 'lime';
+				ctx.lineWidth = 3;
+				ctx.strokeRect(xMin, yMin, width, height);
+			}
+		};
+
+		const interval = setInterval(detectFaces, 200);
+		return () => clearInterval(interval);
+	}, [isReady, showFaceFrame]);
+
 	const handleCapture = () => {
 		if (!videoRef.current || !canvasRef.current) return;
 
@@ -58,15 +118,22 @@ export default function CameraCapture({
 	};
 
 	return (
-		<div className='flex flex-col items-center'>
+		<div className='relative flex flex-col items-center w-full max-w-md aspect-video'>
 			<video
 				ref={videoRef}
 				autoPlay={autoPlay}
 				playsInline
 				muted
 				onLoadedMetadata={() => setIsReady(true)}
-				className='w-full max-w-md aspect-video rounded-md bg-gray-500'
+				className='w-full h-full object-cover rounded-md shadow bg-gray-500'
 			/>
+
+			{showFaceFrame && (
+				<canvas
+					ref={overlayRef}
+					className='absolute top-0 left-0 w-full h-full pointer-events-none'
+				/>
+			)}
 
 			{showControls && (
 				<button

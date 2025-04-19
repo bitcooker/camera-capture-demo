@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import CameraCapture from '@/components/CameraCapture';
 
 export default function CameraDemoPage() {
@@ -51,13 +52,14 @@ export default function CameraDemoPage() {
 					<CameraCapture
 						resolution={{ width, height }}
 						onCapture={handleImageCapture}
+						showFaceFrame={true}
 					/>
 				</>
 			)}
 
 			{capturedImage && (
 				<div className='flex flex-col items-center'>
-					<img
+					<Image
 						src={capturedImage}
 						alt='Captured'
 						className='max-w-md rounded shadow'
