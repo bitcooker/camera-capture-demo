@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Simple CameraCapture Component Demo
 
-## Getting Started
+A demo app for a simple React component that lets you capture high-quality photos from the front camera using the browser's Camera API.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Features
+
+- Uses front-facing camera (`facingMode: user`)
+- Control resolution via props
+- Captures from `<video>` to `<canvas>` for full quality
+- Outputs base64 image via `onCapture` callback
+  
+---
+
+## Usage
+
+1. **Import the component**
+
+```tsx
+import CameraCapture from '@/components/CameraCapture';
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. **Use it inside your page**
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```tsx
+<CameraCapture
+  resolution={{ width: 1920, height: 1080 }}
+  onCapture={(imageBase64) => {
+    console.log('Captured image:', imageBase64);
+    // Upload, preview, or process the image
+  }}
+/>
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## Props
 
-To learn more about Next.js, take a look at the following resources:
+| Prop           | Type                                | Description                                      |
+|----------------|-------------------------------------|--------------------------------------------------|
+| `onCapture`    | `(dataUrl: string) => void`         | **Required.** Called with base64 image on capture |
+| `resolution`   | `{ width: number; height: number }` | Optional. Ideal camera resolution                |
+| `autoPlay`     | `boolean`                           | Optional. Defaults to `true`                     |
+| `showControls` | `boolean`                           | Optional. Show/hide the default capture button   |
 
--   [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
--   [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Preview
 
-## Deploy on Vercel
+https://camera-capture-demo.vercel.app/
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Notes
+
+- Uses `getUserMedia()` under the hood with ideal resolution hints
+- Supports both mobile and desktop, but results depend on device camera quality
+- You can use `canvas.toBlob()` instead if you need binary file uploads
+
+---
+
+Made by [BitCookr](https://github.com/bitcooker)
