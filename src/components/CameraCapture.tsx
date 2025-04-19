@@ -101,12 +101,11 @@ export default function CameraCapture({
 
 			ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-			// Draw center guide box
 			const centerZone = {
-				xMin: canvas.width * 0.3,
-				xMax: canvas.width * 0.7,
-				yMin: canvas.height * 0.3,
-				yMax: canvas.height * 0.7,
+				xMin: canvas.width * 0.4,
+				xMax: canvas.width * 0.6,
+				yMin: canvas.height * 0.4,
+				yMax: canvas.height * 0.6,
 			};
 
 			ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
@@ -194,14 +193,10 @@ export default function CameraCapture({
 			)}
 
 			{showFaceFrame && (
-				<p
-					className={`mt-2 text-sm font-medium ${
-						isCentered ? 'text-green-600' : 'text-white'
-					}`}
-				>
+				<p className={`mt-2 text-sm font-medium text-gray-500`}>
 					{isCentered
-						? '✅ Ready to capture!'
-						: '🔄 Please center your face...'}
+						? 'Ready to capture!'
+						: 'Please center your face...'}
 				</p>
 			)}
 
