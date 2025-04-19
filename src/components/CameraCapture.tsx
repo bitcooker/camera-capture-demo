@@ -9,6 +9,7 @@ interface CameraCaptureProps {
 	autoPlay?: boolean;
 	showControls?: boolean;
 	showFaceFrame?: boolean;
+	mirrored?: boolean;
 }
 
 export default function CameraCapture({
@@ -17,12 +18,15 @@ export default function CameraCapture({
 	autoPlay = true,
 	showControls = true,
 	showFaceFrame = true,
+	mirrored = false,
 }: CameraCaptureProps) {
 	const videoRef = useRef<HTMLVideoElement | null>(null);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const overlayRef = useRef<HTMLCanvasElement | null>(null);
-	const [isReady, setIsReady] = useState(false);
 	const modelRef = useRef<faceDetection.FaceDetector | null>(null);
+
+	const [isReady, setIsReady] = useState(false);
+	const [modelLoaded, setModelLoaded] = useState(false);
 
 	useEffect(() => {
 		const startCamera = async () => {
@@ -35,7 +39,6 @@ export default function CameraCapture({
 					},
 					audio: false,
 				});
-
 				if (videoRef.current) {
 					videoRef.current.srcObject = stream;
 				}
@@ -51,58 +54,74 @@ export default function CameraCapture({
 		const loadModel = async () => {
 			await tf.setBackend('webgl');
 			await tf.ready();
-			console.log('[Model] TensorFlow.js ready');
 			modelRef.current = await faceDetection.createDetector(
 				faceDetection.SupportedModels.MediaPipeFaceDetector,
-				{ runtime: 'tfjs', modelType: 'short' }
+				{
+					runtime: 'mediapipe',
+					solutionPath:
+						'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection',
+					modelType: 'short',
+					maxFaces: 1,
+				}
 			);
-
-			console.log('[Model] Face detection model loaded');
+			setModelLoaded(true);
 		};
 
 		if (showFaceFrame) loadModel();
 	}, [showFaceFrame]);
 
 	useEffect(() => {
-		if (!showFaceFrame) return;
+		if (!showFaceFrame || !modelLoaded) return;
+
+		let frameId: number;
 
 		const detectFaces = async () => {
-			if (
-				!videoRef.current ||
-				!overlayRef.current ||
-				!modelRef.current ||
-				videoRef.current.readyState !== 4
-			)
-				return;
+			const video = videoRef.current;
+			const canvas = overlayRef.current;
+			const model = modelRef.current;
 
-			const ctx = overlayRef.current.getContext('2d');
+			if (
+				!video ||
+				!canvas ||
+				!model ||
+				video.videoWidth === 0 ||
+				video.videoHeight === 0 ||
+				video.readyState < 2
+			) {
+				frameId = requestAnimationFrame(detectFaces);
+				return;
+			}
+
+			const ctx = canvas.getContext('2d');
 			if (!ctx) return;
 
-			const width = videoRef.current.videoWidth;
-			const height = videoRef.current.videoHeight;
+			canvas.width = video.videoWidth;
+			canvas.height = video.videoHeight;
 
-			overlayRef.current.width = width;
-			overlayRef.current.height = height;
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-			ctx.clearRect(0, 0, width, height);
-
-			const faces = await modelRef.current.estimateFaces(
-				videoRef.current
-			);
-			console.log('[FaceDetection] Faces detected:', faces);
+			const faces = await model.estimateFaces(video);
 
 			for (const face of faces) {
 				const { xMin, yMin, width, height } = face.box;
 
+				ctx.save();
+				if (mirrored) {
+					ctx.translate(canvas.width, 0);
+					ctx.scale(-1, 1);
+				}
 				ctx.strokeStyle = 'lime';
 				ctx.lineWidth = 3;
 				ctx.strokeRect(xMin, yMin, width, height);
+				ctx.restore();
 			}
+
+			frameId = requestAnimationFrame(detectFaces);
 		};
 
-		const interval = setInterval(detectFaces, 200);
-		return () => clearInterval(interval);
-	}, [isReady, showFaceFrame]);
+		frameId = requestAnimationFrame(detectFaces);
+		return () => cancelAnimationFrame(frameId);
+	}, [modelLoaded, showFaceFrame, mirrored]);
 
 	const handleCapture = () => {
 		if (!videoRef.current || !canvasRef.current) return;
@@ -115,6 +134,10 @@ export default function CameraCapture({
 
 		const ctx = canvas.getContext('2d');
 		if (ctx) {
+			if (mirrored) {
+				ctx.translate(canvas.width, 0);
+				ctx.scale(-1, 1);
+			}
 			ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 			const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
 			onCapture(dataUrl);
@@ -129,7 +152,9 @@ export default function CameraCapture({
 				playsInline
 				muted
 				onLoadedMetadata={() => setIsReady(true)}
-				className='w-full h-full object-cover rounded-md shadow bg-gray-500'
+				className={`w-full h-full object-cover rounded-md shadow bg-gray-500 ${
+					mirrored ? 'transform scale-x-[-1]' : ''
+				}`}
 			/>
 
 			{showFaceFrame && (
