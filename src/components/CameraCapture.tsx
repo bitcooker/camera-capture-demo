@@ -163,15 +163,36 @@ export default function CameraCapture({
 		canvas.height = video.videoHeight;
 
 		const ctx = canvas.getContext('2d');
-		if (ctx) {
-			if (mirrored) {
-				ctx.translate(canvas.width, 0);
-				ctx.scale(-1, 1);
-			}
-			ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-			const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-			onCapture(dataUrl);
+		if (!ctx) return;
+
+		if (mirrored) {
+			ctx.translate(canvas.width, 0);
+			ctx.scale(-1, 1);
 		}
+
+		ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+		if (adjustLight) {
+			const imageData = ctx.getImageData(
+				0,
+				0,
+				canvas.width,
+				canvas.height
+			);
+			const data = imageData.data;
+			const brightnessFactor = brightness / 100;
+
+			for (let i = 0; i < data.length; i += 4) {
+				data[i] = Math.min(255, data[i] * brightnessFactor);
+				data[i + 1] = Math.min(255, data[i + 1] * brightnessFactor);
+				data[i + 2] = Math.min(255, data[i + 2] * brightnessFactor);
+			}
+
+			ctx.putImageData(imageData, 0, 0);
+		}
+
+		const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+		onCapture(dataUrl);
 	};
 
 	return (
