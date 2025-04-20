@@ -28,6 +28,8 @@ export default function CameraCapture({
 	const [isCentered, setIsCentered] = useState(false);
 	const [isReady, setIsReady] = useState(false);
 	const [modelLoaded, setModelLoaded] = useState(false);
+	const [adjustLight, setAdjustLight] = useState(false);
+	const [brightness, setBrightness] = useState(100);
 
 	useEffect(() => {
 		const startCamera = async () => {
@@ -183,6 +185,9 @@ export default function CameraCapture({
 				className={`w-full h-full object-cover rounded-md shadow bg-gray-500 ${
 					mirrored ? 'transform scale-x-[-1]' : ''
 				}`}
+				style={{
+					filter: `brightness(${brightness}%)`,
+				}}
 			/>
 
 			{showFaceFrame && (
@@ -199,6 +204,29 @@ export default function CameraCapture({
 						: 'Please center your face...'}
 				</p>
 			)}
+
+			<div className='mt-3 w-full flex flex-col items-center'>
+				<label className='flex items-center space-x-2 text-sm text-gray-700'>
+					<input
+						type='checkbox'
+						checked={adjustLight}
+						onChange={(e) => setAdjustLight(e.target.checked)}
+						className='accent-blue-600'
+					/>
+					<span>Adjust brightness</span>
+				</label>
+
+				{adjustLight && (
+					<input
+						type='range'
+						min='50'
+						max='200'
+						value={brightness}
+						onChange={(e) => setBrightness(Number(e.target.value))}
+						className='w-full mt-2'
+					/>
+				)}
+			</div>
 
 			{showControls && (
 				<button
