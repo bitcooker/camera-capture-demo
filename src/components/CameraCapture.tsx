@@ -28,6 +28,8 @@ export default function CameraCapture({
 	const [isCentered, setIsCentered] = useState(false);
 	const [isReady, setIsReady] = useState(false);
 	const [modelLoaded, setModelLoaded] = useState(false);
+	const [adjustLight, setAdjustLight] = useState(false);
+	const [brightness, setBrightness] = useState(100);
 
 	useEffect(() => {
 		const startCamera = async () => {
@@ -161,15 +163,36 @@ export default function CameraCapture({
 		canvas.height = video.videoHeight;
 
 		const ctx = canvas.getContext('2d');
-		if (ctx) {
-			if (mirrored) {
-				ctx.translate(canvas.width, 0);
-				ctx.scale(-1, 1);
-			}
-			ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-			const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-			onCapture(dataUrl);
+		if (!ctx) return;
+
+		if (mirrored) {
+			ctx.translate(canvas.width, 0);
+			ctx.scale(-1, 1);
 		}
+
+		ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+		if (adjustLight) {
+			const imageData = ctx.getImageData(
+				0,
+				0,
+				canvas.width,
+				canvas.height
+			);
+			const data = imageData.data;
+			const brightnessFactor = brightness / 100;
+
+			for (let i = 0; i < data.length; i += 4) {
+				data[i] = Math.min(255, data[i] * brightnessFactor);
+				data[i + 1] = Math.min(255, data[i + 1] * brightnessFactor);
+				data[i + 2] = Math.min(255, data[i + 2] * brightnessFactor);
+			}
+
+			ctx.putImageData(imageData, 0, 0);
+		}
+
+		const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+		onCapture(dataUrl);
 	};
 
 	return (
@@ -183,6 +206,9 @@ export default function CameraCapture({
 				className={`w-full h-full object-cover rounded-md shadow bg-gray-500 ${
 					mirrored ? 'transform scale-x-[-1]' : ''
 				}`}
+				style={{
+					filter: `brightness(${brightness}%)`,
+				}}
 			/>
 
 			{showFaceFrame && (
@@ -199,6 +225,29 @@ export default function CameraCapture({
 						: 'Please center your face...'}
 				</p>
 			)}
+
+			<div className='mt-3 w-full flex flex-col items-center'>
+				<label className='flex items-center space-x-2 text-sm text-gray-700'>
+					<input
+						type='checkbox'
+						checked={adjustLight}
+						onChange={(e) => setAdjustLight(e.target.checked)}
+						className='accent-blue-600'
+					/>
+					<span>Adjust brightness</span>
+				</label>
+
+				{adjustLight && (
+					<input
+						type='range'
+						min='50'
+						max='200'
+						value={brightness}
+						onChange={(e) => setBrightness(Number(e.target.value))}
+						className='w-full mt-2'
+					/>
+				)}
+			</div>
 
 			{showControls && (
 				<button
