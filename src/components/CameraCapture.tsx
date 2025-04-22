@@ -108,8 +108,6 @@ export default function CameraCapture({
 			);
 			const widthRatio = topWidth / bottomWidth;
 
-			console.log(widthRatio);
-
 			const xValues = face.map((p) => p.x);
 			const yValues = face.map((p) => p.y);
 			const faceCenterX =
@@ -138,10 +136,10 @@ export default function CameraCapture({
 			let tiltMessage = '';
 
 			if (widthRatio > 1.02) {
-				tiltMessage = 'Tilt face down';
+				tiltMessage = 'Tilt face up';
 				goodPitch = false;
 			} else if (widthRatio < 1.01) {
-				tiltMessage = 'Tilt face up';
+				tiltMessage = 'Tilt face down';
 				goodPitch = false;
 			}
 
