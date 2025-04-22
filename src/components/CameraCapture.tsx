@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import * as faceDetection from '@tensorflow-models/face-detection';
+import { FaceMesh } from '@mediapipe/face_mesh';
+import { Camera } from '@mediapipe/camera_utils';
 import '@tensorflow/tfjs-backend-webgl';
 
 interface CameraCaptureProps {
@@ -23,13 +23,12 @@ export default function CameraCapture({
 	const videoRef = useRef<HTMLVideoElement | null>(null);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const overlayRef = useRef<HTMLCanvasElement | null>(null);
-	const modelRef = useRef<faceDetection.FaceDetector | null>(null);
+	const cameraRef = useRef<Camera | null>(null);
 
-	const [isCentered, setIsCentered] = useState(false);
 	const [isReady, setIsReady] = useState(false);
-	const [modelLoaded, setModelLoaded] = useState(false);
 	const [adjustLight, setAdjustLight] = useState(false);
 	const [brightness, setBrightness] = useState(100);
+	const [poseGuidance, setPoseGuidance] = useState('Loading...');
 
 	useEffect(() => {
 		const startCamera = async () => {
@@ -54,104 +53,88 @@ export default function CameraCapture({
 	}, [resolution]);
 
 	useEffect(() => {
-		const loadModel = async () => {
-			await tf.setBackend('webgl');
-			await tf.ready();
-			modelRef.current = await faceDetection.createDetector(
-				faceDetection.SupportedModels.MediaPipeFaceDetector,
-				{
-					runtime: 'mediapipe',
-					solutionPath:
-						'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection',
-					modelType: 'short',
-					maxFaces: 1,
-				}
-			);
-			setModelLoaded(true);
-		};
+		if (!showFaceFrame || !videoRef.current || !overlayRef.current) return;
 
-		if (showFaceFrame) loadModel();
-	}, [showFaceFrame]);
+		const faceMesh = new FaceMesh({
+			locateFile: (file) =>
+				`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+		});
 
-	useEffect(() => {
-		if (!showFaceFrame || !modelLoaded) return;
+		faceMesh.setOptions({
+			maxNumFaces: 1,
+			refineLandmarks: true,
+			minDetectionConfidence: 0.5,
+			minTrackingConfidence: 0.5,
+		});
 
-		let frameId: number;
+		faceMesh.onResults((results) => {
+			const canvas = overlayRef.current!;
+			const ctx = canvas.getContext('2d')!;
+			const width = videoRef.current!.videoWidth;
+			const height = videoRef.current!.videoHeight;
 
-		const detectFaces = async () => {
-			const video = videoRef.current;
-			const canvas = overlayRef.current;
-			const model = modelRef.current;
+			canvas.width = width;
+			canvas.height = height;
+			ctx.clearRect(0, 0, width, height);
 
 			if (
-				!video ||
-				!canvas ||
-				!model ||
-				video.videoWidth === 0 ||
-				video.videoHeight === 0 ||
-				video.readyState < 2
+				!results.multiFaceLandmarks ||
+				results.multiFaceLandmarks.length === 0
 			) {
-				frameId = requestAnimationFrame(detectFaces);
+				setPoseGuidance('No face detected');
 				return;
 			}
 
-			const ctx = canvas.getContext('2d');
-			if (!ctx) return;
+			const face = results.multiFaceLandmarks[0];
 
-			canvas.width = video.videoWidth;
-			canvas.height = video.videoHeight;
+			const leftEye = face[33];
+			const rightEye = face[263];
+			const nose = face[1];
 
-			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			const dx = rightEye.x - leftEye.x;
+			const dy = rightEye.y - leftEye.y;
+			const yaw = Math.atan2(dy, dx) * (180 / Math.PI);
 
-			const centerZone = {
-				xMin: canvas.width * 0.4,
-				xMax: canvas.width * 0.6,
-				yMin: canvas.height * 0.4,
-				yMax: canvas.height * 0.6,
-			};
+			const avgEyeY = (leftEye.y + rightEye.y) / 2;
+			const pitch = (nose.y - avgEyeY) * 100;
 
-			ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-			ctx.lineWidth = 1.5;
-			ctx.strokeRect(
-				centerZone.xMin,
-				centerZone.yMin,
-				centerZone.xMax - centerZone.xMin,
-				centerZone.yMax - centerZone.yMin
-			);
+			let message = '';
+			let color = 'white';
 
-			const faces = await model.estimateFaces(video);
-			let centered = false;
-
-			for (const face of faces) {
-				const { xMin, yMin, width, height } = face.box;
-
-				const faceCenterX = xMin + width / 2;
-				const faceCenterY = yMin + height / 2;
-
-				centered =
-					faceCenterX >= centerZone.xMin &&
-					faceCenterX <= centerZone.xMax &&
-					faceCenterY >= centerZone.yMin &&
-					faceCenterY <= centerZone.yMax;
-
-				ctx.save();
-				if (mirrored) {
-					ctx.translate(canvas.width, 0);
-					ctx.scale(-1, 1);
-				}
-				ctx.strokeStyle = centered ? 'lime' : 'white';
-				ctx.lineWidth = 3;
-				ctx.strokeRect(xMin, yMin, width, height);
-				ctx.restore();
+			if (Math.abs(yaw) < 5 && Math.abs(pitch) < 3) {
+				message = '✅ Perfect! Hold still';
+				color = 'lime';
+			} else {
+				if (yaw < -5) message = 'Turn right';
+				else if (yaw > 5) message = 'Turn left';
+				else if (pitch > 3) message = 'Tilt up';
+				else if (pitch < -3) message = 'Tilt down';
 			}
 
-			setIsCentered(centered);
-			frameId = requestAnimationFrame(detectFaces);
-		};
+			setPoseGuidance(message);
 
-		frameId = requestAnimationFrame(detectFaces);
-		return () => cancelAnimationFrame(frameId);
-	}, [modelLoaded, showFaceFrame, mirrored]);
+			ctx.strokeStyle = color;
+			ctx.lineWidth = 2;
+			face.forEach((point) => {
+				ctx.beginPath();
+				ctx.arc(point.x * width, point.y * height, 1.5, 0, 2 * Math.PI);
+				ctx.stroke();
+			});
+		});
+
+		cameraRef.current = new Camera(videoRef.current, {
+			onFrame: async () => {
+				await faceMesh.send({ image: videoRef.current! });
+			},
+			width: resolution.width,
+			height: resolution.height,
+		});
+		cameraRef.current.start();
+
+		return () => {
+			cameraRef.current?.stop();
+		};
+	}, [showFaceFrame, resolution]);
 
 	const handleCapture = () => {
 		if (!videoRef.current || !canvasRef.current) return;
@@ -219,10 +202,14 @@ export default function CameraCapture({
 			)}
 
 			{showFaceFrame && (
-				<p className={`mt-2 text-sm font-medium text-gray-500`}>
-					{isCentered
-						? 'Ready to capture!'
-						: 'Please center your face...'}
+				<p
+					className={`mt-2 text-sm font-medium ${
+						poseGuidance.includes('Perfect')
+							? 'text-green-600'
+							: 'text-yellow-500'
+					}`}
+				>
+					{poseGuidance}
 				</p>
 			)}
 
