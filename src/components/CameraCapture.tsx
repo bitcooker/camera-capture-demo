@@ -87,9 +87,10 @@ export default function CameraCapture({
 			}
 
 			const face = results.multiFaceLandmarks[0];
-
 			const leftEye = face[33];
 			const rightEye = face[263];
+			const chin = face[152];
+			const forehead = face[10];
 
 			const xValues = face.map((p) => p.x);
 			const yValues = face.map((p) => p.y);
@@ -106,27 +107,40 @@ export default function CameraCapture({
 			const dy = rightEye.y - leftEye.y;
 			const yaw = Math.atan2(dy, dx) * (180 / Math.PI);
 
-			// pitch
+			// tilt detection
 			const avgEyeY = (leftEye.y + rightEye.y) / 2;
-			const chinY = face[152].y;
+			const topLength = avgEyeY - forehead.y;
+			const bottomLength = chin.y - avgEyeY;
+			const tiltRatio = topLength / bottomLength;
 
-			const faceSpan = chinY - avgEyeY;
-			const neutralSpan = 0.35;
-			const pitch = faceSpan - neutralSpan;
+			let goodPitch = true;
+			let tiltMessage = '';
+
+			if (tiltRatio > 0.75) {
+				tiltMessage = 'Tilt face down';
+				goodPitch = false;
+			} else if (tiltRatio < 0.55) {
+				tiltMessage = 'Tilt face up';
+				goodPitch = false;
+			}
 
 			const yawTolerance = 7;
 			const centerTolerance = 0.12;
+			const faceSpan = chin.y - avgEyeY;
 			const minSpan = 0.32;
 			const maxSpan = 0.42;
 
 			let message = '';
 			const goodYaw = Math.abs(yaw) < yawTolerance;
-			const goodPitch = Math.abs(pitch) < 0.02;
 			const goodCenter =
 				Math.abs(centerOffsetX) < centerTolerance &&
 				Math.abs(centerOffsetY) < centerTolerance;
 
-			if (!goodCenter) {
+			if (faceSpan < minSpan) {
+				message = 'Move closer — face too small';
+			} else if (faceSpan > maxSpan) {
+				message = 'Move slightly back — too close';
+			} else if (!goodCenter) {
 				if (centerOffsetX < -centerTolerance)
 					message = 'Move face right';
 				else if (centerOffsetX > centerTolerance)
@@ -139,17 +153,9 @@ export default function CameraCapture({
 			} else if (!goodYaw) {
 				message = yaw < 0 ? 'Turn face right' : 'Turn face left';
 			} else if (!goodPitch) {
-				message = pitch > 0 ? 'Tilt face up' : 'Tilt face down';
+				message = tiltMessage;
 			} else {
 				message = 'Perfect! Hold still';
-			}
-
-			if (goodYaw && goodPitch && goodCenter) {
-				if (faceSpan < minSpan) {
-					message = 'Move closer — face too small';
-				} else if (faceSpan > maxSpan) {
-					message = 'Move slightly back — too close';
-				}
 			}
 
 			setPoseGuidance(message);
@@ -190,10 +196,8 @@ export default function CameraCapture({
 
 	const handleCapture = () => {
 		if (!videoRef.current || !canvasRef.current) return;
-
 		const video = videoRef.current;
 		const canvas = canvasRef.current;
-
 		canvas.width = video.videoWidth;
 		canvas.height = video.videoHeight;
 
