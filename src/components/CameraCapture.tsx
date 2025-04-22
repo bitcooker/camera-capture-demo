@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import * as faceDetection from '@tensorflow-models/face-detection';
+import { FaceMesh } from '@mediapipe/face_mesh';
+import { Camera } from '@mediapipe/camera_utils';
 import '@tensorflow/tfjs-backend-webgl';
 
 interface CameraCaptureProps {
@@ -23,13 +23,12 @@ export default function CameraCapture({
 	const videoRef = useRef<HTMLVideoElement | null>(null);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const overlayRef = useRef<HTMLCanvasElement | null>(null);
-	const modelRef = useRef<faceDetection.FaceDetector | null>(null);
+	const cameraRef = useRef<Camera | null>(null);
 
-	const [isCentered, setIsCentered] = useState(false);
 	const [isReady, setIsReady] = useState(false);
-	const [modelLoaded, setModelLoaded] = useState(false);
 	const [adjustLight, setAdjustLight] = useState(false);
 	const [brightness, setBrightness] = useState(100);
+	const [poseGuidance, setPoseGuidance] = useState('Loading...');
 
 	useEffect(() => {
 		const startCamera = async () => {
@@ -54,108 +53,159 @@ export default function CameraCapture({
 	}, [resolution]);
 
 	useEffect(() => {
-		const loadModel = async () => {
-			await tf.setBackend('webgl');
-			await tf.ready();
-			modelRef.current = await faceDetection.createDetector(
-				faceDetection.SupportedModels.MediaPipeFaceDetector,
-				{
-					runtime: 'mediapipe',
-					solutionPath:
-						'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection',
-					modelType: 'short',
-					maxFaces: 1,
-				}
-			);
-			setModelLoaded(true);
-		};
+		if (!showFaceFrame || !videoRef.current || !overlayRef.current) return;
 
-		if (showFaceFrame) loadModel();
-	}, [showFaceFrame]);
+		const faceMesh = new FaceMesh({
+			locateFile: (file) =>
+				`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+		});
 
-	useEffect(() => {
-		if (!showFaceFrame || !modelLoaded) return;
+		faceMesh.setOptions({
+			maxNumFaces: 1,
+			refineLandmarks: true,
+			minDetectionConfidence: 0.5,
+			minTrackingConfidence: 0.5,
+		});
 
-		let frameId: number;
+		faceMesh.onResults((results) => {
+			const canvas = overlayRef.current!;
+			const ctx = canvas.getContext('2d')!;
+			const video = videoRef.current!;
+			const width = video.videoWidth;
+			const height = video.videoHeight;
 
-		const detectFaces = async () => {
-			const video = videoRef.current;
-			const canvas = overlayRef.current;
-			const model = modelRef.current;
+			canvas.width = width;
+			canvas.height = height;
+			ctx.clearRect(0, 0, width, height);
 
 			if (
-				!video ||
-				!canvas ||
-				!model ||
-				video.videoWidth === 0 ||
-				video.videoHeight === 0 ||
-				video.readyState < 2
+				!results.multiFaceLandmarks ||
+				results.multiFaceLandmarks.length === 0
 			) {
-				frameId = requestAnimationFrame(detectFaces);
+				setPoseGuidance('No face detected');
 				return;
 			}
 
-			const ctx = canvas.getContext('2d');
-			if (!ctx) return;
+			const face = results.multiFaceLandmarks[0];
 
-			canvas.width = video.videoWidth;
-			canvas.height = video.videoHeight;
+			const leftEye = face[33];
+			const rightEye = face[263];
+			const chin = face[152];
+			const avgEyeY = (leftEye.y + rightEye.y) / 2;
 
-			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			const topLeft = face[127];
+			const topRight = face[356];
+			const bottomLeft = face[234];
+			const bottomRight = face[454];
 
-			const centerZone = {
-				xMin: canvas.width * 0.4,
-				xMax: canvas.width * 0.6,
-				yMin: canvas.height * 0.4,
-				yMax: canvas.height * 0.6,
-			};
-
-			ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-			ctx.lineWidth = 1.5;
-			ctx.strokeRect(
-				centerZone.xMin,
-				centerZone.yMin,
-				centerZone.xMax - centerZone.xMin,
-				centerZone.yMax - centerZone.yMin
+			const topWidth = Math.hypot(
+				topRight.x - topLeft.x,
+				topRight.y - topLeft.y
 			);
+			const bottomWidth = Math.hypot(
+				bottomRight.x - bottomLeft.x,
+				bottomRight.y - bottomLeft.y
+			);
+			const widthRatio = topWidth / bottomWidth;
 
-			const faces = await model.estimateFaces(video);
-			let centered = false;
+			const xValues = face.map((p) => p.x);
+			const yValues = face.map((p) => p.y);
+			const faceCenterX =
+				(Math.min(...xValues) + Math.max(...xValues)) / 2;
+			const faceCenterY =
+				(Math.min(...yValues) + Math.max(...yValues)) / 2;
 
-			for (const face of faces) {
-				const { xMin, yMin, width, height } = face.box;
+			const centerOffsetX = faceCenterX - 0.5;
+			const centerOffsetY = faceCenterY - 0.5;
 
-				const faceCenterX = xMin + width / 2;
-				const faceCenterY = yMin + height / 2;
+			const nose = face[1];
+			const noseOffsetX = nose.x - 0.5;
 
-				centered =
-					faceCenterX >= centerZone.xMin &&
-					faceCenterX <= centerZone.xMax &&
-					faceCenterY >= centerZone.yMin &&
-					faceCenterY <= centerZone.yMax;
+			const faceSpan = chin.y - avgEyeY;
 
-				ctx.save();
-				if (mirrored) {
-					ctx.translate(canvas.width, 0);
-					ctx.scale(-1, 1);
-				}
-				ctx.strokeStyle = centered ? 'lime' : 'white';
-				ctx.lineWidth = 3;
-				ctx.strokeRect(xMin, yMin, width, height);
-				ctx.restore();
+			const centerTolerance = 0.12;
+			const yawTolerance = 0.06;
+			const minSpan = 0.32;
+			const maxSpan = 0.42;
+
+			const goodCenter =
+				Math.abs(centerOffsetX) < centerTolerance &&
+				Math.abs(centerOffsetY) < centerTolerance;
+			const goodYaw = Math.abs(noseOffsetX) < yawTolerance;
+			let goodPitch = true;
+			let tiltMessage = '';
+
+			if (widthRatio > 1.02) {
+				tiltMessage = 'Tilt face up';
+				goodPitch = false;
+			} else if (widthRatio < 1.01) {
+				tiltMessage = 'Tilt face down';
+				goodPitch = false;
 			}
 
-			setIsCentered(centered);
-			frameId = requestAnimationFrame(detectFaces);
-		};
+			let message = '';
 
-		frameId = requestAnimationFrame(detectFaces);
-		return () => cancelAnimationFrame(frameId);
-	}, [modelLoaded, showFaceFrame, mirrored]);
+			if (faceSpan < minSpan) {
+				message = 'Move closer — face too small';
+			} else if (faceSpan > maxSpan) {
+				message = 'Move slightly back — too close';
+			} else if (!goodCenter) {
+				if (centerOffsetX < -centerTolerance)
+					message = 'Move face right';
+				else if (centerOffsetX > centerTolerance)
+					message = 'Move face left';
+				else if (centerOffsetY < -centerTolerance)
+					message = 'Move face down';
+				else if (centerOffsetY > centerTolerance)
+					message = 'Move face up';
+				else message = 'Center your face';
+			} else if (!goodYaw) {
+				message =
+					noseOffsetX < 0 ? 'Turn face right' : 'Turn face left';
+			} else if (!goodPitch) {
+				message = tiltMessage;
+			} else {
+				message = 'Perfect! Hold still';
+			}
+
+			setPoseGuidance(message);
+
+			const outlineIndices = [
+				10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397,
+				365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58,
+				132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
+			];
+
+			ctx.beginPath();
+			for (let i = 0; i < outlineIndices.length; i++) {
+				const point = face[outlineIndices[i]];
+				const x = point.x * width;
+				const y = point.y * height;
+				if (i === 0) ctx.moveTo(x, y);
+				else ctx.lineTo(x, y);
+			}
+			ctx.closePath();
+			ctx.strokeStyle = message.includes('Perfect') ? 'lime' : 'white';
+			ctx.lineWidth = 2;
+			ctx.stroke();
+		});
+
+		cameraRef.current = new Camera(videoRef.current, {
+			onFrame: async () => {
+				await faceMesh.send({ image: videoRef.current! });
+			},
+			width: resolution.width,
+			height: resolution.height,
+		});
+		cameraRef.current.start();
+
+		return () => {
+			cameraRef.current?.stop();
+		};
+	}, [showFaceFrame, resolution]);
 
 	const handleCapture = () => {
 		if (!videoRef.current || !canvasRef.current) return;
-
 		const video = videoRef.current;
 		const canvas = canvasRef.current;
 
@@ -206,9 +256,7 @@ export default function CameraCapture({
 				className={`w-full h-full object-cover rounded-md shadow bg-gray-500 ${
 					mirrored ? 'transform scale-x-[-1]' : ''
 				}`}
-				style={{
-					filter: `brightness(${brightness}%)`,
-				}}
+				style={{ filter: `brightness(${brightness}%)` }}
 			/>
 
 			{showFaceFrame && (
@@ -219,10 +267,14 @@ export default function CameraCapture({
 			)}
 
 			{showFaceFrame && (
-				<p className={`mt-2 text-sm font-medium text-gray-500`}>
-					{isCentered
-						? 'Ready to capture!'
-						: 'Please center your face...'}
+				<p
+					className={`mt-2 text-sm font-medium ${
+						poseGuidance.includes('Perfect')
+							? 'text-green-600'
+							: 'text-yellow-500'
+					}`}
+				>
+					{poseGuidance}
 				</p>
 			)}
 
