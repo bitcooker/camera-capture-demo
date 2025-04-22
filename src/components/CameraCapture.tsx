@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FaceMesh } from '@mediapipe/face_mesh';
 import { Camera } from '@mediapipe/camera_utils';
 import '@tensorflow/tfjs-backend-webgl';
+import { getFaceOrientation2DTo3D } from '@/utils';
 
 interface CameraCaptureProps {
 	onCapture: (imageData: string) => void;
@@ -101,29 +102,23 @@ export default function CameraCapture({
 			const centerOffsetX = faceCenterX - 0.5;
 			const centerOffsetY = faceCenterY - 0.5;
 
-			// yaw
-			const dx = rightEye.x - leftEye.x;
-			const dy = rightEye.y - leftEye.y;
-			const yaw = Math.atan2(dy, dx) * (180 / Math.PI);
+			const { yaw, pitch } = getFaceOrientation2DTo3D(
+				face,
+				width,
+				height
+			);
 
-			// pitch
 			const avgEyeY = (leftEye.y + rightEye.y) / 2;
 			const chinY = face[152].y;
-
 			const faceSpan = chinY - avgEyeY;
 
-			const pitchRaw = chinY - avgEyeY;
-			const pitchNeutral = 0.35;
-			const pitch = pitchRaw - pitchNeutral;
-
-			const yawTolerance = 7;
 			const centerTolerance = 0.12;
 			const minSpan = 0.32;
 			const maxSpan = 0.42;
 
 			let message = '';
-			const goodYaw = Math.abs(yaw) < yawTolerance;
-			const goodPitch = Math.abs(pitch) < 0.06;
+			const goodYaw = Math.abs(yaw) < 12;
+			const goodPitch = Math.abs(pitch) < 12;
 			const goodCenter =
 				Math.abs(centerOffsetX) < centerTolerance &&
 				Math.abs(centerOffsetY) < centerTolerance;
@@ -145,7 +140,7 @@ export default function CameraCapture({
 			} else if (!goodYaw) {
 				message = yaw < 0 ? 'Turn face right' : 'Turn face left';
 			} else if (!goodPitch) {
-				message = pitch < -0.06 ? 'Tilt face up' : 'Tilt face down';
+				message = pitch < 0 ? 'Tilt face up' : 'Tilt face down';
 			} else {
 				message = 'Perfect! Hold still';
 			}
