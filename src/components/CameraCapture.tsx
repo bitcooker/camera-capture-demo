@@ -116,8 +116,9 @@ export default function CameraCapture({
 			const pitch = chinY - avgEyeY - 0.25;
 
 			const yawTolerance = 7;
-			const pitchTolerance = 5;
 			const centerTolerance = 0.12;
+			const minSpan = 0.18;
+			const maxSpan = 0.28;
 
 			let message = '';
 			const goodYaw = Math.abs(yaw) < yawTolerance;
@@ -142,6 +143,12 @@ export default function CameraCapture({
 				message = pitch > 0 ? '👆 Tilt face up' : '👇 Tilt face down';
 			} else {
 				message = 'Perfect! Hold still';
+			}
+
+			if (faceSpan < minSpan) {
+				message = 'Move closer to the camera';
+			} else if (faceSpan > maxSpan) {
+				message = 'Move slightly back from camera';
 			}
 
 			setPoseGuidance(message);
