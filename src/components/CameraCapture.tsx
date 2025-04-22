@@ -121,7 +121,7 @@ export default function CameraCapture({
 
 			let message = '';
 			const goodYaw = Math.abs(yaw) < yawTolerance;
-			const goodPitch = Math.abs(pitch) < 0.06;
+			const goodPitch = Math.abs(pitch) < 0.03;
 			const goodCenter =
 				Math.abs(centerOffsetX) < centerTolerance &&
 				Math.abs(centerOffsetY) < centerTolerance;
