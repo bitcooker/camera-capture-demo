@@ -116,8 +116,8 @@ export default function CameraCapture({
 
 			const yawTolerance = 7;
 			const centerTolerance = 0.12;
-			const minSpan = 0.18;
-			const maxSpan = 0.28;
+			const minSpan = 0.32;
+			const maxSpan = 0.42;
 
 			let message = '';
 			const goodYaw = Math.abs(yaw) < yawTolerance;
@@ -144,10 +144,12 @@ export default function CameraCapture({
 				message = 'Perfect! Hold still';
 			}
 
-			if (faceSpan < minSpan) {
-				message = 'Move closer to the camera';
-			} else if (faceSpan > maxSpan) {
-				message = 'Move slightly back from camera';
+			if (goodYaw && goodPitch && goodCenter) {
+				if (faceSpan < minSpan) {
+					message = 'Move closer — face too small';
+				} else if (faceSpan > maxSpan) {
+					message = 'Move slightly back — too close';
+				}
 			}
 
 			setPoseGuidance(message);
