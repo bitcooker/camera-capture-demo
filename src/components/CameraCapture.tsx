@@ -108,6 +108,8 @@ export default function CameraCapture({
 			);
 			const widthRatio = topWidth / bottomWidth;
 
+			console.log(widthRatio);
+
 			const xValues = face.map((p) => p.x);
 			const yValues = face.map((p) => p.y);
 			const faceCenterX =
