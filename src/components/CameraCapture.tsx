@@ -111,8 +111,10 @@ export default function CameraCapture({
 			const chinY = face[152].y;
 
 			const faceSpan = chinY - avgEyeY;
-			const neutralSpan = 0.35;
-			const pitch = faceSpan - neutralSpan;
+
+			const pitchRaw = chinY - avgEyeY;
+			const pitchNeutral = 0.35;
+			const pitch = pitchRaw - pitchNeutral;
 
 			const yawTolerance = 7;
 			const centerTolerance = 0.12;
@@ -121,12 +123,16 @@ export default function CameraCapture({
 
 			let message = '';
 			const goodYaw = Math.abs(yaw) < yawTolerance;
-			const goodPitch = Math.abs(pitch) < 0.03;
+			const goodPitch = Math.abs(pitch) < 0.06;
 			const goodCenter =
 				Math.abs(centerOffsetX) < centerTolerance &&
 				Math.abs(centerOffsetY) < centerTolerance;
 
-			if (!goodCenter) {
+			if (faceSpan < minSpan) {
+				message = 'Move closer — face too small';
+			} else if (faceSpan > maxSpan) {
+				message = 'Move slightly back — too close';
+			} else if (!goodCenter) {
 				if (centerOffsetX < -centerTolerance)
 					message = 'Move face right';
 				else if (centerOffsetX > centerTolerance)
@@ -139,17 +145,9 @@ export default function CameraCapture({
 			} else if (!goodYaw) {
 				message = yaw < 0 ? 'Turn face right' : 'Turn face left';
 			} else if (!goodPitch) {
-				message = pitch > 0 ? 'Tilt face up' : 'Tilt face down';
+				message = pitch < -0.06 ? 'Tilt face up' : 'Tilt face down';
 			} else {
 				message = 'Perfect! Hold still';
-			}
-
-			if (goodYaw && goodPitch && goodCenter) {
-				if (faceSpan < minSpan) {
-					message = 'Move closer — face too small';
-				} else if (faceSpan > maxSpan) {
-					message = 'Move slightly back — too close';
-				}
 			}
 
 			setPoseGuidance(message);
