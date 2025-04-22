@@ -70,8 +70,9 @@ export default function CameraCapture({
 		faceMesh.onResults((results) => {
 			const canvas = overlayRef.current!;
 			const ctx = canvas.getContext('2d')!;
-			const width = videoRef.current!.videoWidth;
-			const height = videoRef.current!.videoHeight;
+			const video = videoRef.current!;
+			const width = video.videoWidth;
+			const height = video.videoHeight;
 
 			canvas.width = width;
 			canvas.height = height;
@@ -91,35 +92,74 @@ export default function CameraCapture({
 			const rightEye = face[263];
 			const nose = face[1];
 
+			const xValues = face.map((p) => p.x);
+			const yValues = face.map((p) => p.y);
+			const faceCenterX =
+				(Math.min(...xValues) + Math.max(...xValues)) / 2;
+			const faceCenterY =
+				(Math.min(...yValues) + Math.max(...yValues)) / 2;
+
+			const centerOffsetX = faceCenterX - 0.5;
+			const centerOffsetY = faceCenterY - 0.5;
+
+			// yaw
 			const dx = rightEye.x - leftEye.x;
 			const dy = rightEye.y - leftEye.y;
 			const yaw = Math.atan2(dy, dx) * (180 / Math.PI);
 
+			// pitch
 			const avgEyeY = (leftEye.y + rightEye.y) / 2;
 			const pitch = (nose.y - avgEyeY) * 100;
 
-			let message = '';
-			let color = 'white';
+			const yawTolerance = 7;
+			const pitchTolerance = 5;
+			const centerTolerance = 0.12;
 
-			if (Math.abs(yaw) < 5 && Math.abs(pitch) < 3) {
-				message = '✅ Perfect! Hold still';
-				color = 'lime';
+			let message = '';
+			const goodYaw = Math.abs(yaw) < yawTolerance;
+			const goodPitch = Math.abs(pitch) < pitchTolerance;
+			const goodCenter =
+				Math.abs(centerOffsetX) < centerTolerance &&
+				Math.abs(centerOffsetY) < centerTolerance;
+
+			if (!goodCenter) {
+				if (centerOffsetX < -centerTolerance)
+					message = 'Move face right';
+				else if (centerOffsetX > centerTolerance)
+					message = 'Move face left';
+				else if (centerOffsetY < -centerTolerance)
+					message = 'Move face down';
+				else if (centerOffsetY > centerTolerance)
+					message = 'Move face up';
+				else message = 'Center your face';
+			} else if (!goodYaw) {
+				message = yaw < 0 ? 'Turn face right' : 'Turn face left';
+			} else if (!goodPitch) {
+				message = pitch < 0 ? 'Tilt face down' : 'Tilt face up';
 			} else {
-				if (yaw < -5) message = 'Turn right';
-				else if (yaw > 5) message = 'Turn left';
-				else if (pitch > 3) message = 'Tilt up';
-				else if (pitch < -3) message = 'Tilt down';
+				message = 'Perfect! Hold still';
 			}
 
 			setPoseGuidance(message);
 
-			ctx.strokeStyle = color;
+			const outlineIndices = [
+				10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397,
+				365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58,
+				132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
+			];
+
+			ctx.beginPath();
+			for (let i = 0; i < outlineIndices.length; i++) {
+				const point = face[outlineIndices[i]];
+				const x = point.x * width;
+				const y = point.y * height;
+				if (i === 0) ctx.moveTo(x, y);
+				else ctx.lineTo(x, y);
+			}
+			ctx.closePath();
+			ctx.strokeStyle = message.includes('Perfect') ? 'lime' : 'white';
 			ctx.lineWidth = 2;
-			face.forEach((point) => {
-				ctx.beginPath();
-				ctx.arc(point.x * width, point.y * height, 1.5, 0, 2 * Math.PI);
-				ctx.stroke();
-			});
+			ctx.stroke();
 		});
 
 		cameraRef.current = new Camera(videoRef.current, {
