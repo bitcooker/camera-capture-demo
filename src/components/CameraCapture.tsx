@@ -87,27 +87,12 @@ export default function CameraCapture({
 			}
 
 			const face = results.multiFaceLandmarks[0];
+
 			const leftEye = face[33];
 			const rightEye = face[263];
 			const chin = face[152];
-			// const forehead = face[10];
+			const avgEyeY = (leftEye.y + rightEye.y) / 2;
 
-			const xValues = face.map((p) => p.x);
-			const yValues = face.map((p) => p.y);
-			const faceCenterX =
-				(Math.min(...xValues) + Math.max(...xValues)) / 2;
-			const faceCenterY =
-				(Math.min(...yValues) + Math.max(...yValues)) / 2;
-
-			const centerOffsetX = faceCenterX - 0.5;
-			const centerOffsetY = faceCenterY - 0.5;
-
-			// yaw
-			const dx = rightEye.x - leftEye.x;
-			const dy = rightEye.y - leftEye.y;
-			const yaw = Math.atan2(dy, dx) * (180 / Math.PI);
-
-			// tilt detection
 			const topLeft = face[127];
 			const topRight = face[356];
 			const bottomLeft = face[234];
@@ -123,29 +108,42 @@ export default function CameraCapture({
 			);
 			const widthRatio = topWidth / bottomWidth;
 
+			const xValues = face.map((p) => p.x);
+			const yValues = face.map((p) => p.y);
+			const faceCenterX =
+				(Math.min(...xValues) + Math.max(...xValues)) / 2;
+			const faceCenterY =
+				(Math.min(...yValues) + Math.max(...yValues)) / 2;
+
+			const centerOffsetX = faceCenterX - 0.5;
+			const centerOffsetY = faceCenterY - 0.5;
+
+			const nose = face[1];
+			const noseOffsetX = nose.x - 0.5;
+
+			const faceSpan = chin.y - avgEyeY;
+
+			const centerTolerance = 0.12;
+			const yawTolerance = 0.06;
+			const minSpan = 0.32;
+			const maxSpan = 0.42;
+
+			const goodCenter =
+				Math.abs(centerOffsetX) < centerTolerance &&
+				Math.abs(centerOffsetY) < centerTolerance;
+			const goodYaw = Math.abs(noseOffsetX) < yawTolerance;
 			let goodPitch = true;
 			let tiltMessage = '';
 
-			if (widthRatio > 1.15) {
+			if (widthRatio > 1.1) {
 				tiltMessage = 'Tilt face down';
 				goodPitch = false;
-			} else if (widthRatio < 0.85) {
+			} else if (widthRatio < 0.9) {
 				tiltMessage = 'Tilt face up';
 				goodPitch = false;
 			}
 
-			const yawTolerance = 7;
-			const centerTolerance = 0.12;
-			const avgEyeY = (leftEye.y + rightEye.y) / 2;
-			const faceSpan = chin.y - avgEyeY;
-			const minSpan = 0.32;
-			const maxSpan = 0.42;
-
 			let message = '';
-			const goodYaw = Math.abs(yaw) < yawTolerance;
-			const goodCenter =
-				Math.abs(centerOffsetX) < centerTolerance &&
-				Math.abs(centerOffsetY) < centerTolerance;
 
 			if (faceSpan < minSpan) {
 				message = 'Move closer — face too small';
@@ -162,7 +160,8 @@ export default function CameraCapture({
 					message = 'Move face up';
 				else message = 'Center your face';
 			} else if (!goodYaw) {
-				message = yaw < 0 ? 'Turn face right' : 'Turn face left';
+				message =
+					noseOffsetX < 0 ? 'Turn face right' : 'Turn face left';
 			} else if (!goodPitch) {
 				message = tiltMessage;
 			} else {
@@ -207,9 +206,9 @@ export default function CameraCapture({
 
 	const handleCapture = () => {
 		if (!videoRef.current || !canvasRef.current) return;
-
 		const video = videoRef.current;
 		const canvas = canvasRef.current;
+
 		canvas.width = video.videoWidth;
 		canvas.height = video.videoHeight;
 
