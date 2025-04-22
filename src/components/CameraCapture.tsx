@@ -30,6 +30,7 @@ export default function CameraCapture({
 	const [modelLoaded, setModelLoaded] = useState(false);
 	const [adjustLight, setAdjustLight] = useState(false);
 	const [brightness, setBrightness] = useState(100);
+	const [faceGuidance, setFaceGuidance] = useState('');
 
 	useEffect(() => {
 		const startCamera = async () => {
@@ -120,11 +121,12 @@ export default function CameraCapture({
 			);
 
 			const faces = await model.estimateFaces(video);
+
 			let centered = false;
+			let guidance = '';
 
 			for (const face of faces) {
 				const { xMin, yMin, width, height } = face.box;
-
 				const faceCenterX = xMin + width / 2;
 				const faceCenterY = yMin + height / 2;
 
@@ -133,6 +135,28 @@ export default function CameraCapture({
 					faceCenterX <= centerZone.xMax &&
 					faceCenterY >= centerZone.yMin &&
 					faceCenterY <= centerZone.yMax;
+
+				const aspectRatio = width / height;
+				const horizontalOffset =
+					(faceCenterX - canvas.width / 2) / canvas.width;
+				const verticalOffset =
+					(faceCenterY - canvas.height / 2) / canvas.height;
+
+				if (!centered) {
+					if (horizontalOffset < -0.05)
+						guidance = 'Turn your face right';
+					else if (horizontalOffset > 0.05)
+						guidance = 'Turn your face left';
+					else if (verticalOffset < -0.05)
+						guidance = 'Tilt your face down';
+					else if (verticalOffset > 0.05)
+						guidance = 'Tilt your face up';
+					else guidance = 'Align your face with the center';
+				} else if (aspectRatio < 0.75 || aspectRatio > 1.4) {
+					guidance = 'Keep your face straight';
+				} else {
+					guidance = 'Perfect! Hold still.';
+				}
 
 				ctx.save();
 				if (mirrored) {
@@ -146,6 +170,8 @@ export default function CameraCapture({
 			}
 
 			setIsCentered(centered);
+			setFaceGuidance(guidance);
+
 			frameId = requestAnimationFrame(detectFaces);
 		};
 
@@ -218,11 +244,13 @@ export default function CameraCapture({
 				/>
 			)}
 
-			{showFaceFrame && (
-				<p className={`mt-2 text-sm font-medium text-gray-500`}>
-					{isCentered
-						? 'Ready to capture!'
-						: 'Please center your face...'}
+			{showFaceFrame && faceGuidance && (
+				<p
+					className={`mt-2 text-sm font-medium ${
+						isCentered ? 'text-green-600' : 'text-yellow-500'
+					}`}
+				>
+					{faceGuidance}
 				</p>
 			)}
 
