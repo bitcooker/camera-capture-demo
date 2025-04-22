@@ -90,7 +90,6 @@ export default function CameraCapture({
 
 			const leftEye = face[33];
 			const rightEye = face[263];
-			const nose = face[1];
 
 			const xValues = face.map((p) => p.x);
 			const yValues = face.map((p) => p.y);
