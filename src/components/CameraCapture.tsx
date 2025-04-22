@@ -137,10 +137,10 @@ export default function CameraCapture({
 			let goodPitch = true;
 			let tiltMessage = '';
 
-			if (widthRatio > 1.1) {
+			if (widthRatio > 1.02) {
 				tiltMessage = 'Tilt face down';
 				goodPitch = false;
-			} else if (widthRatio < 0.9) {
+			} else if (widthRatio < 1.01) {
 				tiltMessage = 'Tilt face up';
 				goodPitch = false;
 			}
