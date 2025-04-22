@@ -116,10 +116,12 @@ export default function CameraCapture({
 			let goodPitch = true;
 			let tiltMessage = '';
 
-			if (tiltRatio > 0.75) {
+			console.log(tiltRatio);
+
+			if (tiltRatio > 0.85) {
 				tiltMessage = 'Tilt face down';
 				goodPitch = false;
-			} else if (tiltRatio < 0.55) {
+			} else if (tiltRatio < 0.35) {
 				tiltMessage = 'Tilt face up';
 				goodPitch = false;
 			}
