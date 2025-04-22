@@ -111,8 +111,8 @@ export default function CameraCapture({
 			const chinY = face[152].y;
 
 			const faceSpan = chinY - avgEyeY;
-
-			const pitch = chinY - avgEyeY - 0.25;
+			const neutralSpan = 0.35;
+			const pitch = faceSpan - neutralSpan;
 
 			const yawTolerance = 7;
 			const centerTolerance = 0.12;
@@ -121,7 +121,7 @@ export default function CameraCapture({
 
 			let message = '';
 			const goodYaw = Math.abs(yaw) < yawTolerance;
-			const goodPitch = Math.abs(pitch) < 0.04;
+			const goodPitch = Math.abs(pitch) < 0.06;
 			const goodCenter =
 				Math.abs(centerOffsetX) < centerTolerance &&
 				Math.abs(centerOffsetY) < centerTolerance;
@@ -139,7 +139,7 @@ export default function CameraCapture({
 			} else if (!goodYaw) {
 				message = yaw < 0 ? 'Turn face right' : 'Turn face left';
 			} else if (!goodPitch) {
-				message = pitch > 0 ? '👆 Tilt face up' : '👇 Tilt face down';
+				message = pitch > 0 ? 'Tilt face up' : 'Tilt face down';
 			} else {
 				message = 'Perfect! Hold still';
 			}
