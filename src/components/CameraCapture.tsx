@@ -108,26 +108,35 @@ export default function CameraCapture({
 			const yaw = Math.atan2(dy, dx) * (180 / Math.PI);
 
 			// tilt detection
-			const avgEyeY = (leftEye.y + rightEye.y) / 2;
-			const topLength = avgEyeY - forehead.y;
-			const bottomLength = chin.y - avgEyeY;
-			const tiltRatio = topLength / bottomLength;
+			const topLeft = face[127];
+			const topRight = face[356];
+			const bottomLeft = face[234];
+			const bottomRight = face[454];
+
+			const topWidth = Math.hypot(
+				topRight.x - topLeft.x,
+				topRight.y - topLeft.y
+			);
+			const bottomWidth = Math.hypot(
+				bottomRight.x - bottomLeft.x,
+				bottomRight.y - bottomLeft.y
+			);
+			const widthRatio = topWidth / bottomWidth;
 
 			let goodPitch = true;
 			let tiltMessage = '';
 
-			console.log(tiltRatio);
-
-			if (tiltRatio > 0.85) {
+			if (widthRatio > 1.15) {
 				tiltMessage = 'Tilt face down';
 				goodPitch = false;
-			} else if (tiltRatio < 0.35) {
+			} else if (widthRatio < 0.85) {
 				tiltMessage = 'Tilt face up';
 				goodPitch = false;
 			}
 
 			const yawTolerance = 7;
 			const centerTolerance = 0.12;
+			const avgEyeY = (leftEye.y + rightEye.y) / 2;
 			const faceSpan = chin.y - avgEyeY;
 			const minSpan = 0.32;
 			const maxSpan = 0.42;
@@ -198,6 +207,7 @@ export default function CameraCapture({
 
 	const handleCapture = () => {
 		if (!videoRef.current || !canvasRef.current) return;
+
 		const video = videoRef.current;
 		const canvas = canvasRef.current;
 		canvas.width = video.videoWidth;
@@ -247,9 +257,7 @@ export default function CameraCapture({
 				className={`w-full h-full object-cover rounded-md shadow bg-gray-500 ${
 					mirrored ? 'transform scale-x-[-1]' : ''
 				}`}
-				style={{
-					filter: `brightness(${brightness}%)`,
-				}}
+				style={{ filter: `brightness(${brightness}%)` }}
 			/>
 
 			{showFaceFrame && (
