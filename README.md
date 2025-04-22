@@ -14,6 +14,7 @@ A demo app for a simple React component that lets you capture high-quality photo
 -   Detects if face is **centered in frame**
 -   Optional mirror preview
 -   Light adjustment
+-   Face guidance (center, distance, yaw, tilt)
 
 ---
 
