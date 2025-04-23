@@ -31,25 +31,19 @@ export default function CameraCapture({
 	const [poseGuidance, setPoseGuidance] = useState('Loading...');
 
 	useEffect(() => {
-		const startCamera = async () => {
-			try {
-				const stream = await navigator.mediaDevices.getUserMedia({
-					video: {
-						facingMode: 'user',
-						width: { ideal: resolution.width },
-						height: { ideal: resolution.height },
-					},
-					audio: false,
-				});
-				if (videoRef.current) {
-					videoRef.current.srcObject = stream;
-				}
-			} catch (err) {
-				console.error('Failed to access camera:', err);
-			}
-		};
-
-		startCamera();
+		navigator.mediaDevices
+			.getUserMedia({
+				video: {
+					facingMode: 'user',
+					width: { ideal: resolution.width },
+					height: { ideal: resolution.height },
+				},
+				audio: false,
+			})
+			.then((stream) => {
+				if (videoRef.current) videoRef.current.srcObject = stream;
+			})
+			.catch(console.error);
 	}, [resolution]);
 
 	useEffect(() => {
@@ -78,25 +72,23 @@ export default function CameraCapture({
 			canvas.height = height;
 			ctx.clearRect(0, 0, width, height);
 
-			if (
-				!results.multiFaceLandmarks ||
-				results.multiFaceLandmarks.length === 0
-			) {
+			if (!results.multiFaceLandmarks?.length) {
 				setPoseGuidance('No face detected');
 				return;
 			}
 
 			const face = results.multiFaceLandmarks[0];
 
+			const mirroredX = (x: number) => (mirrored ? 1 - x : x);
+
 			const leftEye = face[33];
 			const rightEye = face[263];
 			const chin = face[152];
-			const avgEyeY = (leftEye.y + rightEye.y) / 2;
-
 			const topLeft = face[127];
 			const topRight = face[356];
 			const bottomLeft = face[234];
 			const bottomRight = face[454];
+			const avgEyeY = (leftEye.y + rightEye.y) / 2;
 
 			const topWidth = Math.hypot(
 				topRight.x - topLeft.x,
@@ -108,23 +100,20 @@ export default function CameraCapture({
 			);
 			const widthRatio = topWidth / bottomWidth;
 
-			const xValues = face.map((p) => p.x);
+			const xValues = face.map((p) => mirroredX(p.x));
 			const yValues = face.map((p) => p.y);
 			const faceCenterX =
 				(Math.min(...xValues) + Math.max(...xValues)) / 2;
 			const faceCenterY =
 				(Math.min(...yValues) + Math.max(...yValues)) / 2;
-
 			const centerOffsetX = faceCenterX - 0.5;
 			const centerOffsetY = faceCenterY - 0.5;
 
-			const nose = face[1];
-			const noseOffsetX = nose.x - 0.5;
-
+			const noseOffsetX = mirroredX(face[1].x) - 0.5;
 			const faceSpan = chin.y - avgEyeY;
 
-			const centerTolerance = 0.12;
 			const yawTolerance = 0.06;
+			const centerTolerance = 0.12;
 			const minSpan = 0.32;
 			const maxSpan = 0.42;
 
@@ -132,6 +121,7 @@ export default function CameraCapture({
 				Math.abs(centerOffsetX) < centerTolerance &&
 				Math.abs(centerOffsetY) < centerTolerance;
 			const goodYaw = Math.abs(noseOffsetX) < yawTolerance;
+
 			let goodPitch = true;
 			let tiltMessage = '';
 
@@ -158,7 +148,6 @@ export default function CameraCapture({
 					message = 'Move face down';
 				else if (centerOffsetY > centerTolerance)
 					message = 'Move face up';
-				else message = 'Center your face';
 			} else if (!goodYaw) {
 				message =
 					noseOffsetX < 0 ? 'Turn face right' : 'Turn face left';
@@ -176,6 +165,12 @@ export default function CameraCapture({
 				132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
 			];
 
+			ctx.save();
+			if (mirrored) {
+				ctx.translate(width, 0);
+				ctx.scale(-1, 1);
+			}
+
 			ctx.beginPath();
 			for (let i = 0; i < outlineIndices.length; i++) {
 				const point = face[outlineIndices[i]];
@@ -188,6 +183,7 @@ export default function CameraCapture({
 			ctx.strokeStyle = message.includes('Perfect') ? 'lime' : 'white';
 			ctx.lineWidth = 2;
 			ctx.stroke();
+			ctx.restore();
 		});
 
 		cameraRef.current = new Camera(videoRef.current, {
@@ -197,8 +193,8 @@ export default function CameraCapture({
 			width: resolution.width,
 			height: resolution.height,
 		});
-		cameraRef.current.start();
 
+		cameraRef.current.start();
 		return () => {
 			cameraRef.current?.stop();
 		};
@@ -206,9 +202,9 @@ export default function CameraCapture({
 
 	const handleCapture = () => {
 		if (!videoRef.current || !canvasRef.current) return;
+
 		const video = videoRef.current;
 		const canvas = canvasRef.current;
-
 		canvas.width = video.videoWidth;
 		canvas.height = video.videoHeight;
 
@@ -231,13 +227,11 @@ export default function CameraCapture({
 			);
 			const data = imageData.data;
 			const brightnessFactor = brightness / 100;
-
 			for (let i = 0; i < data.length; i += 4) {
 				data[i] = Math.min(255, data[i] * brightnessFactor);
 				data[i + 1] = Math.min(255, data[i + 1] * brightnessFactor);
 				data[i + 2] = Math.min(255, data[i + 2] * brightnessFactor);
 			}
-
 			ctx.putImageData(imageData, 0, 0);
 		}
 
