@@ -53,6 +53,7 @@ export default function CameraDemoPage() {
 						resolution={{ width, height }}
 						onCapture={handleImageCapture}
 						showFaceFrame={true}
+						mirrored={true}
 					/>
 				</>
 			)}
